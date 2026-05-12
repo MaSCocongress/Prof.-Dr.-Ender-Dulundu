@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Yoklama Sistemi</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 30px;
+      text-align: center;
+    }
+
+    .box {
+      background: white;
+      max-width: 420px;
+      margin: auto;
+      padding: 25px;
+      border-radius: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    input,
+    button {
+      width: 90%;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 16px;
+      border-radius: 8px;
+    }
+
+    input {
+      border: 1px solid #ccc;
+    }
+
+    button {
+      border: none;
+      background: #222;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.9;
+    }
+
+    #message {
+      margin-top: 20px;
+      font-weight: bold;
+      white-space: pre-line;
+    }
+
+  </style>
+</head>
+
+<body>
+
+  <div class="box">
+
+    <h2>Yoklama Sistemi</h2>
+
+    <input
+      id="name"
+      type="text"
+      placeholder="Ad Soyad"
+    >
+
+    <button onclick="checkIn()">
+      Yoklama Ver
+    </button>
+
+    <p id="message"></p>
+
+  </div>
+
+  <script>
+
+    // =========================
+    // CONFIG
+    // =========================
+
+    const SCRIPT_URL =
+      "https://script.google.com/macros/s/AKfycbzdVNFdpY7G6zTJMqkIewitc1SVlbImmxz1yso7Cj3PRM6FTPU793tDiSooeDh4nsXU/exec";
+
+    const MEETING_NAME =
+      "Deneme Etkinliği";
+
+    const TARGET_LAT =
+      40.95211338550056;
+
+    const TARGET_LON =
+      29.139845458102993;
+
+    const MAX_DISTANCE =
+      100;
+
+    // =========================
+    // DISTANCE FUNCTION
+    // =========================
+
+    function getDistance(
+      lat1,
+      lon1,
+      lat2,
+      lon2
+    ) {
+
+      const R = 6371000;
+
+      const toRad =
+        x => x * Math.PI / 180;
+
+      const dLat =
+        toRad(lat2 - lat1);
+
+      const dLon =
+        toRad(lon2 - lon1);
+
+      const a =
+        Math.sin(dLat / 2) *
+        Math.sin(dLat / 2) +
+
+        Math.cos(toRad(lat1)) *
+        Math.cos(toRad(lat2)) *
+
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+      const c =
+        2 * Math.atan2(
+          Math.sqrt(a),
+          Math.sqrt(1 - a)
+        );
+
+      return R * c;
+    }
+
+    // =========================
+    // MAIN CHECK-IN
+    // =========================
+// =========================
+// DEVICE ID
+// =========================
+
+function getDeviceId() {
+
+  let deviceId =
+    localStorage.getItem("deviceId");
+
+  if (!deviceId) {
+
+    deviceId =
+      crypto.randomUUID();
+
+    localStorage.setItem(
+      "deviceId",
+      deviceId
+    );
+  }
+
+  return deviceId;
+}
+    function checkIn() {
+
+      const name =
+        document.getElementById("name")
+        .value
+        .trim();
+
+      const message =
+        document.getElementById("message");
+
+      if (!name) {
+
+        message.innerText =
+          "Lütfen ad soyad gir.";
+
+        return;
+      }
+
+      if (!navigator.geolocation) {
+
+        message.innerText =
+          "Bu cihaz konum özelliğini desteklemiyor.";
+
+        return;
+      }
+
+      message.innerText =
+        "Konum alınıyor...";
+
+      navigator.geolocation.getCurrentPosition(
+
+        // SUCCESS
+        function(position) {
+
+          const latitude =
+            position.coords.latitude;
+
+          const longitude =
+            position.coords.longitude;
+
+          const distance =
+            Math.round(
+              getDistance(
+                latitude,
+                longitude,
+                TARGET_LAT,
+                TARGET_LON
+              )
+            );
+
+          const status =
+            distance <= MAX_DISTANCE
+            ? "ACCEPTED"
+            : "TOO_FAR";
+
+          const payload = {
+
+  name: name,
+
+  deviceId: getDeviceId(),
+
+  meeting: MEETING_NAME,
+
+  latitude: latitude,
+
+  longitude: longitude,
+
+  distance: distance,
+
+  status: status
+};
+
+          message.innerText =
+            "Yoklama gönderiliyor...";
+
+          fetch(SCRIPT_URL, {
+
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "text/plain"
+            },
+
+            body:
+              JSON.stringify(payload)
+
+          })
+
+          .then(res => res.json())
+
+          .then(data => {
+
+            console.log(data);
+
+            if (
+              data.status === "success"
+            ) {
+
+              if (
+                status === "ACCEPTED"
+              ) {
+
+                message.innerText =
+                  "Yoklama başarıyla verildi.\n\n" +
+                  "Konum uygun.\n" +
+                  "Mesafe: " +
+                  distance +
+                  " metre.";
+
+              } else {
+
+                message.innerText =
+                  "Yoklama gönderildi.\n\n" +
+                  "Ancak konum uzakta görünüyor.\n" +
+                  "Mesafe: " +
+                  distance +
+                  " metre.";
+              }
+
+            }
+
+            else if (
+              data.status ===
+              "already_checked_in"
+            ) {
+
+              message.innerText =
+                "Bu kişi zaten yoklama verdi.";
+            }
+            else if (
+            data.status === "duplicate_device"
+          ) {
+            message.innerText =
+              "Bu cihaz zaten yoklama verdi.";
+          }
+
+            else {
+
+              message.innerText =
+                "Sunucu hatası oluştu.";
+            }
+
+          })
+
+          .catch(err => {
+
+            console.error(err);
+
+            message.innerText =
+              "Sunucuya ulaşılamıyor.";
+          });
+
+        },
+
+        // ERROR
+        function(error) {
+
+          console.error(error);
+
+          if (
+            error.code ===
+            error.PERMISSION_DENIED
+          ) {
+
+            message.innerText =
+              "Konum izni reddedildi.";
+
+          }
+
+          else if (
+            error.code ===
+            error.POSITION_UNAVAILABLE
+          ) {
+
+            message.innerText =
+              "Konum bilgisi alınamadı.";
+          }
+
+          else if (
+            error.code ===
+            error.TIMEOUT
+          ) {
+
+            message.innerText =
+              "Konum alma süresi doldu.";
+          
+          }
+            else if (
+            data.status === "duplicate_device"
+          ) {
+            message.innerText =
+              "Bu cihaz zaten yoklama verdi.";
+          }
+
+          else {
+
+            message.innerText =
+              "Bilinmeyen konum hatası.";
+          }
+
+        },
+
+        // OPTIONS
+        {
+          enableHighAccuracy: true,
+          timeout: 20000,
+          maximumAge: 0
+        }
+
+      );
+
+    }
+
+  </script>
+
+</body>
+</html>
